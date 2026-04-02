@@ -1,12 +1,15 @@
 name: Update Stock Data
 on:
   schedule:
-    - cron: '0 18 * * 1-5' # Runs every weekday at 11:30 PM IST (6 PM UTC)
-  workflow_dispatch:      # Allows you to run it manually with a button
+    - cron: '0 18 * * 1-5'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # This gives the runner permission to save the file back to your repo
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -14,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
@@ -28,5 +31,5 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add market_data.parquet
-          git commit -m "Weekly Data Update" || exit 0
+          git commit -m "Weekly Data Update" || echo "No changes to commit"
           git push
