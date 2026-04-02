@@ -1,0 +1,32 @@
+name: Update Stock Data
+on:
+  schedule:
+    - cron: '0 18 * * 1-5' # Runs every weekday at 11:30 PM IST (6 PM UTC)
+  workflow_dispatch:      # Allows you to run it manually with a button
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install yfinance pandas fastparquet pyarrow
+
+      - name: Run Downloader
+        run: python downloader.py
+
+      - name: Commit and Push Data
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add market_data.parquet
+          git commit -m "Weekly Data Update" || exit 0
+          git push
