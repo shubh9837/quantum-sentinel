@@ -3,36 +3,27 @@ import pandas as pd
 import os
 
 def download_data():
-    print("--- Starting Data Update Process ---")
-    
-    # 1. Check if tickers.csv exists
     if not os.path.exists("tickers.csv"):
-        print("❌ ERROR: tickers.csv not found in the repository!")
-        return
+        print("❌ Error: tickers.csv missing!")
+        exit(1)
 
-    try:
-        # 2. Load Tickers
-        df_tickers = pd.read_csv("tickers.csv")
-        symbols = [str(s).strip().upper() for s in df_tickers.iloc[:, 0].tolist()]
-        # Add .NS if missing
-        symbols = [s if s.endswith(".NS") else f"{s}.NS" for s in symbols]
+    df_tickers = pd.read_csv("tickers.csv")
+    # This handles files with or without headers automatically
+    raw_symbols = df_tickers.iloc[:, 0].dropna().tolist()
+    symbols = [str(s).strip().upper() for s in raw_symbols]
+    symbols = [s if s.endswith(".NS") else f"{s}.NS" for s in symbols]
+    
+    print(f"Attempting to download {len(symbols)} stocks...")
+    
+    # Download with a longer timeout and auto-repair
+    data = yf.download(symbols, period="10y", interval="1d", group_by='ticker', threads=True)
+    
+    if data.empty:
+        print("❌ Error: No data returned from Yahoo.")
+        exit(1)
         
-        print(f"Found {len(symbols)} symbols. First 5: {symbols[:5]}")
-        
-        # 3. Download
-        print("Downloading from Yahoo Finance...")
-        data = yf.download(symbols, period="10y", interval="1d", group_by='ticker', threads=True)
-        
-        if data.empty:
-            print("❌ ERROR: Yahoo returned NO data. Check your ticker symbols!")
-            return
-
-        # 4. Save
-        data.to_parquet("market_data.parquet")
-        print("✅ SUCCESS: market_data.parquet created and saved.")
-        
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR: {str(e)}")
+    data.to_parquet("market_data.parquet")
+    print("✅ Success! market_data.parquet saved.")
 
 if __name__ == "__main__":
     download_data()
