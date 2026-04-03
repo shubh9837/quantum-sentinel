@@ -1,0 +1,33 @@
+name: Daily Market Downloader
+
+on:
+  schedule:
+    - cron: '30 10 * * *' # Runs automatically at 4:00 PM IST
+  workflow_dispatch:      # THIS LINE ENABLES THE MANUAL BUTTON
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas yfinance pyarrow fastparquet
+
+      - name: Run Downloader
+        run: python downloader.py
+
+      - name: Commit and Push Parquet
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add market_data.parquet
+          git commit -m "Update Market Data Parquet" || exit 0
+          git push
