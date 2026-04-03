@@ -3,8 +3,8 @@ from breeze_connect import BreezeConnect
 import os
 
 # --- 1. SETTINGS (Enter your ICICI Keys here) ---
-API_KEY = "YOUR_APP_KEY_HERE"
-SECRET_KEY = "YOUR_SECRET_KEY_HERE"
+API_KEY = "29#73S4M~375=7163B7343875498Z4v6"
+SECRET_KEY = "g14&66601c977Y%(5=!Y05500n2434jZ"
 SESSION_TOKEN = "YOUR_SESSION_TOKEN_HERE" # Generated daily via ICICI login
 
 def download_data():
