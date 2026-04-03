@@ -1,0 +1,30 @@
+name: Manual Sector Enrichment
+
+on:
+  workflow_dispatch: # This is the magic line that creates the "Manual" button
+
+jobs:
+  enrich-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/checkout@v3
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install pandas
+
+      - name: Run Enrichment Script
+        run: python enrich_tickers.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add tickers_enriched.csv
+          git commit -m "Update enriched tickers with sectors" || exit 0
+          git push
