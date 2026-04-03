@@ -4,3 +4,4 @@ yfinance
 fastparquet
 pyarrow
 numpy
+breeze-connect
