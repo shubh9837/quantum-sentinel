@@ -1,53 +1,56 @@
 import pandas as pd
-from breeze_connect import BreezeConnect
-import os
-
-# --- 1. SETTINGS (Enter your ICICI Keys here) ---
-API_KEY = "29#73S4M~375=7163B7343875498Z4v6"
-SECRET_KEY = "g14&66601c977Y%(5=!Y05500n2434jZ"
-SESSION_TOKEN = "YOUR_SESSION_TOKEN_HERE" # Generated daily via ICICI login
+import time
+from twelvedata import TDClient
+import streamlit as st
 
 def download_data():
-    print("--- Initializing Breeze API ---")
-    
-    # Initialize Breeze
-    breeze = BreezeConnect(api_key=API_KEY)
-    breeze.generate_session(api_secret=SECRET_KEY, session_token=SESSION_TOKEN)
+    # 1. Setup API Client
+    key = st.secrets["TWELVE_DATA_KEY"]
+    td = TDClient(apikey=key)
 
-    # Load your tickers.csv
+    # 2. Load Tickers
     df_tickers = pd.read_csv("tickers.csv")
-    symbols = df_tickers['SYMBOL'].dropna().tolist()
+    # Note: Twelve Data uses "SYMBOL:XNSE" for National Stock Exchange
+    symbols = [f"{s}:XNSE" for s in df_tickers['SYMBOL'].dropna().tolist()]
     
     market_data = {}
+    count = 0
+
+    st.info(f"Starting download for {len(symbols)} stocks. This will take time due to rate limits...")
 
     for symbol in symbols:
         try:
-            print(f"Fetching: {symbol}")
-            # Fetch last 1000 days of daily data
-            res = breeze.get_historical_data_v2(
+            # Fetch Daily Data
+            ts = td.time_series(
+                symbol=symbol,
                 interval="1day",
-                from_date="2023-01-01T07:00:00.000Z",
-                to_date="2026-04-03T07:00:00.000Z",
-                stock_code=symbol,
-                exchange_code="NSE"
+                outputsize=500 # Approx 2 years of data
             )
-            
-            if res['status'] == 200:
-                temp_df = pd.DataFrame(res['Success'])
-                # Standardize columns to match your app's expectations
-                temp_df = temp_df.rename(columns={
-                    'close': 'Close', 'open': 'Open', 
-                    'high': 'High', 'low': 'Low', 'volume': 'Volume'
-                })
-                market_data[symbol] = temp_df
-                
-        except Exception as e:
-            print(f"Skipping {symbol}: {e}")
+            df = ts.as_pandas()
 
-    # Combine and save as Parquet
-    final_df = pd.concat(market_data, axis=1)
-    final_df.to_parquet("market_data.parquet")
-    print("✅ SUCCESS: Data refreshed via Breeze API.")
+            if not df.empty:
+                # Clean column names to match your app logic
+                df.columns = [c.capitalize() for c in df.columns]
+                market_data[symbol.replace(":XNSE", "")] = df
+                count += 1
+            
+            # --- THE "STABILITY" PAUSE ---
+            # Free tier only allows 8 requests per minute. 
+            # We wait 8 seconds between stocks to stay safe.
+            time.sleep(8) 
+
+            if count >= 800: # Stay under the 800 daily limit
+                break
+
+        except Exception as e:
+            print(f"Error fetching {symbol}: {e}")
+            continue
+
+    # 3. Save to Parquet
+    if market_data:
+        final_df = pd.concat(market_data, axis=1)
+        final_df.to_parquet("market_data.parquet")
+        st.success("✅ Market Data Updated via Twelve Data")
 
 if __name__ == "__main__":
     download_data()
