@@ -7,7 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # This gives the runner permission to save the file back to your repo
     permissions:
       contents: write
     steps:
@@ -21,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install yfinance pandas fastparquet pyarrow
+          pip install yfinance pandas fastparquet pyarrow numpy
 
       - name: Run Downloader
         run: python downloader.py
@@ -31,5 +30,5 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add market_data.parquet
-          git commit -m "Weekly Data Update" || echo "No changes to commit"
+          git commit -m "Auto-update market data" || echo "No changes to commit"
           git push
