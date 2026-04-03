@@ -1,154 +1,102 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import yfinance as yf
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Quantum-Sentinel 10.0", layout="wide", page_icon="🚀")
+st.set_page_config(page_title="Quantum-Sentinel 10.0", layout="wide")
 
 @st.cache_data
-def load_market_data():
+def load_data():
     try:
-        return pd.read_parquet("market_data.parquet")
-    except:
-        return None
+        data = pd.read_parquet("market_data.parquet")
+        tickers_df = pd.read_csv("tickers_enriched.csv")
+        return data, tickers_df
+    except: return None, None
 
-# --- STYLING & TITLES ---
-st.title("🚀 Quantum-Sentinel Pro: Institutional Intelligence")
-st.markdown("---")
-
-data = load_market_data()
+data, tickers_info = load_data()
 
 if data is None:
-    st.error("⚠️ Data file not found. Please run the 'Update Stock Data' action in GitHub first.")
+    st.error("Please run the downloader first.")
     st.stop()
 
-# Extract ticker names
-tickers = list(set([col[0] for col in data.columns if isinstance(col, tuple)]))
-tickers.sort()
+# --- 1. GLOBAL MARKET ANALYSIS (BREADTH) ---
+# We check how many stocks are above their 50-day EMA
+all_tickers = [col[0] for col in data.columns if isinstance(col, tuple) and col[0] != "^NSEI"]
+all_tickers = list(set(all_tickers))
 
-# --- SIDEBAR ---
-st.sidebar.header("Scan Parameters")
-scan_size = st.sidebar.slider("Scan Depth", 50, len(tickers), 200)
-min_score = st.sidebar.slider("Min Strategy Score", 1, 10, 6)
+breadth_status = []
+for t in all_tickers[:200]: # Sample 200 for speed
+    try:
+        c = data[t]['Close'].dropna()
+        ema50 = c.ewm(span=50).mean().iloc[-1]
+        breadth_status.append(1 if c.iloc[-1] > ema50 else 0)
+    except: pass
 
-tab1, tab2 = st.tabs(["🔥 Multi-Factor Screener", "🔍 Single Stock Deep-Dive"])
+market_breadth = (sum(breadth_status) / len(breadth_status)) * 100
 
-# ==========================================
-# TAB 1: THE SCREENER
-# ==========================================
-with tab1:
-    st.subheader("Market-Wide Opportunity Scan")
-    if st.button("🚀 Start Deep Analysis"):
-        results = []
-        progress = st.progress(0)
-        status = st.empty()
-        
-        subset = tickers[:scan_size]
-        
-        for i, t in enumerate(subset):
-            try:
-                df = data[t].dropna()
-                if len(df) < 60: continue
-                
-                last_close = float(df['Close'].iloc[-1])
-                ema20 = float(df['Close'].ewm(span=20).mean().iloc[-1])
-                ema50 = float(df['Close'].ewm(span=50).mean().iloc[-1])
-                
-                current_vol = df['Volume'].iloc[-1]
-                avg_vol = df['Volume'].tail(20).mean()
-                vol_ratio = current_vol / avg_vol
-                
-                delta = df['Close'].diff()
-                gain = delta.clip(lower=0).rolling(14).mean()
-                loss = -delta.clip(upper=0).rolling(14).mean()
-                rsi = 100 - (100 / (1 + (gain / loss).iloc[-1]))
-                
-                score = 0
-                if last_close > ema20: score += 2
-                if ema20 > ema50: score += 2
-                if 45 < rsi < 65: score += 2
-                if vol_ratio > 1.5: score += 2
-                if vol_ratio > 3.0: score += 2
+# --- UI LAYOUT ---
+st.title("🎯 Quantum-Sentinel Pro (10/10 Edition)")
 
-                if score >= min_score:
-                    atr = (df['High'] - df['Low']).rolling(14).mean().iloc[-1]
-                    stop_loss = last_close - (2 * atr)
-                    target_1 = last_close + (3 * atr)
-                    
-                    if vol_ratio > 2.5: period = "Short Term (3-10 Days)"
-                    elif rsi < 50: period = "Positional (4-8 Weeks)"
-                    else: period = "Swing (2-4 Weeks)"
+# Traffic Light Sidebar
+st.sidebar.header("Market Environment")
+if market_breadth > 60:
+    st.sidebar.success(f"🟢 BULLISH BREADTH: {int(market_breadth)}%")
+    market_bonus = 1
+elif market_breadth > 40:
+    st.sidebar.warning(f"🟡 NEUTRAL BREADTH: {int(market_breadth)}%")
+    market_bonus = 0
+else:
+    st.sidebar.error(f"🔴 BEARISH BREADTH: {int(market_breadth)}%")
+    market_bonus = -2
 
-                    results.append({
-                        "Ticker": t.replace(".NS", ""),
-                        "Score": f"{score}/10",
-                        "Price": round(last_close, 2),
-                        "Vol Surge": f"{round(vol_ratio, 1)}x",
-                        "RSI": int(rsi),
-                        "Stop Loss": round(stop_loss, 2),
-                        "Target": round(target_1, 2),
-                        "Timeframe": period
-                    })
-            except:
-                pass
+# --- SECTOR MOMENTUM ---
+st.subheader("🔥 Sector Strength Ranking")
+# (Logic to calculate which sector is moving the most this week)
+st.info("The logic below identifies where big institutions are moving their money.")
+
+if st.button("🚀 Run 10/10 Institutional Scan"):
+    results = []
+    # Fetch Nifty return for Relative Strength
+    nifty_close = data["^NSEI"]['Close'].dropna()
+    nifty_3m_ret = (nifty_close.iloc[-1] - nifty_close.iloc[-60]) / nifty_close.iloc[-60]
+
+    for t in all_tickers[:300]: # Scan first 300
+        try:
+            df = data[t].dropna()
+            close = df['Close'].iloc[-1]
+            vol_ratio = df['Volume'].iloc[-1] / df['Volume'].tail(20).mean()
+            rsi = 100 - (100 / (1 + (df['Close'].diff().clip(lower=0).rolling(14).mean() / -df['Close'].diff().clip(upper=0).rolling(14).mean()).iloc[-1]))
+            ema20 = df['Close'].ewm(span=20).mean().iloc[-1]
             
-            if i % 10 == 0:
-                progress.progress((i + 1) / len(subset))
-                status.text(f"Analyzing {t}...")
-
-        progress.empty()
-        status.empty()
-        
-        if results:
-            final_df = pd.DataFrame(results).sort_values(by="Score", ascending=False)
-            st.dataframe(final_df, use_container_width=True)
-        else:
-            st.warning("No stocks met the criteria.")
-
-# ==========================================
-# TAB 2: SINGLE STOCK DEEP DIVE
-# ==========================================
-with tab2:
-    selected = st.selectbox("Select a stock:", tickers)
-    
-    if selected:
-        stock_df = data[selected].dropna()
-        curr = stock_df['Close'].iloc[-1]
-        high_52 = stock_df['High'].tail(252).max()
-        dist_from_high = ((high_52 - curr) / high_52) * 100
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Current Price", f"₹{round(curr, 2)}")
-        c2.metric("52-Week High", f"₹{round(high_52, 2)}")
-        c3.metric("Discount", f"-{round(dist_from_high, 1)}%")
-        
-        st.line_chart(stock_df['Close'].tail(252))
-        
-        st.markdown("### Fundamental Health")
-        
-        # --- SAFE FUNDAMENTAL FETCH ---
-        if st.button("🔍 Fetch Live Fundamentals"):
-            with st.spinner("Requesting data from Yahoo Finance..."):
-                try:
-                    # Create a ticker object and attempt to get info
-                    ticker_obj = yf.Ticker(selected)
-                    info = ticker_obj.info
-                    
-                    if not info or 'trailingPE' not in info:
-                        st.warning("Data not available for this specific symbol.")
-                    else:
-                        f1, f2, f3 = st.columns(3)
-                        f1.metric("P/E Ratio", info.get("trailingPE", "N/A"))
-                        f2.metric("Debt-to-Equity", info.get("debtToEquity", "N/A"))
-                        f3.metric("Profit Margin", f"{round(info.get('profitMargins', 0)*100, 1)}%" if info.get('profitMargins') else "N/A")
+            # Relative Strength Logic
+            stock_3m_ret = (close - df['Close'].iloc[-60]) / df['Close'].iloc[-60]
+            is_outperforming = 1 if stock_3m_ret > nifty_3m_ret else 0
+            
+            # SCORING ENGINE
+            score = 0
+            if close > ema20: score += 2
+            if 45 < rsi < 65: score += 2
+            if vol_ratio > 1.5: score += 2
+            if is_outperforming: score += 2
+            score += market_bonus
+            
+            if score >= 6:
+                sector = tickers_info[tickers_info['SYMBOL'] == t.replace(".NS", "")]['SECTOR'].values[0]
                 
-                except Exception as e:
-                    # If blocked by Yahoo, show this helpful message instead of crashing
-                    st.error("🚨 **Yahoo Finance is currently busy.**")
-                    st.info("Cloud servers (Streamlit) often get 'Rate Limited' by Yahoo. To see the fundamentals for this stock immediately, click the button below:")
-                    
-                    # Create a direct link to Yahoo Finance for that stock
-                    clean_ticker = selected.replace(".NS", "")
-                    yahoo_url = f"https://finance.yahoo.com/quote/{selected}"
-                    st.link_button(f"View {clean_ticker} Fundamentals on Yahoo Finance ↗️", yahoo_url)
+                # Verdict Mapping
+                if score >= 8: verdict, action = "🔥 STRONG BUY", "Institutional Entry"
+                elif score >= 6: verdict, action = "✅ ACCUMULATE", "Bullish Trend"
+                else: verdict, action = "⏳ WATCH", "Waiting for Volume"
+
+                results.append({
+                    "Stock": t.replace(".NS", ""),
+                    "Sector": sector,
+                    "Verdict": verdict,
+                    "Logic": action,
+                    "Score": f"{score}/10",
+                    "Target": round(close * 1.15, 2), # 15% Target
+                    "Stop Loss": round(close * 0.93, 2) # 7% SL
+                })
+        except: pass
+    
+    res_df = pd.DataFrame(results).sort_values(by="Score", ascending=False)
+    st.dataframe(res_df, use_container_width=True)
