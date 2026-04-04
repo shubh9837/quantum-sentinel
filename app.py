@@ -56,8 +56,23 @@ st.info("The logic below identifies where big institutions are moving their mone
 if st.button("🚀 Run 10/10 Institutional Scan"):
     results = []
     # Fetch Nifty return for Relative Strength
-    nifty_close = data["^NSEI"]['Close'].dropna()
-    nifty_3m_ret = (nifty_close.iloc[-1] - nifty_close.iloc[-60]) / nifty_close.iloc[-60]
+    # --- SAFE INDEX LOADING FOR MULTI-INDEX ---
+nifty_3m_ret = 0  # Default fallback
+
+try:
+    # Check if ^NSEI exists in the top level of columns
+    if "^NSEI" in data.columns.levels[0]:
+        # Safely access the Close price for Nifty
+        nifty_close = data.xs('Close', axis=1, level=1)['^NSEI'].dropna()
+        
+        if len(nifty_close) > 60:
+            # Calculate 3-month (approx 60 trading days) return
+            nifty_3m_ret = (nifty_close.iloc[-1] - nifty_close.iloc[-60]) / nifty_close.iloc[-60]
+            st.sidebar.caption(f"Nifty 3M Return: {round(nifty_3m_ret*100, 2)}%")
+    else:
+        st.sidebar.error("⚠️ Nifty Index (^NSEI) not found in data.")
+except Exception as e:
+    st.sidebar.warning(f"Note: Relative Strength disabled ({e})")
 
     for t in all_tickers[:300]: # Scan first 300
         try:
